@@ -10,3 +10,14 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 *.log
+
+# Capacitor Android - 忽略 build 产物 + 本地路径文件
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+android/captures/
+android/.cxx/
+android/app/release/
+android/.idea/
+*.iml

@@ -1,0 +1,88 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # 允许在 GitHub 网页手动触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Create .env (高德 Key 直接写入 - 前端 KEY 本就公开)
+        run: |
+          cat > .env <<EOF
+          VITE_AMAP_JS_KEY=7a336a91dcdd7da4ece72237d9f8eda7
+          VITE_AMAP_JS_SECRET=1b897c4e6931d283dea1bfdd7ae08215
+          VITE_AMAP_WEB_KEY=401ee1ea1d3eb34677ec859e3e66eb3c
+          VITE_FALLBACK_LOCATION=114.063,22.547
+          EOF
+
+      - name: Build web assets (vite build)
+        run: npm run build
+
+      - name: Setup JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
+
+      - name: Capacitor sync (copy web assets to android/)
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Show APK info
+        run: |
+          ls -lh android/app/build/outputs/apk/debug/
+          echo "---"
+          file android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK as artifact (always available)
+        uses: actions/upload-artifact@v4
+        with:
+          name: shuaigefan-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: 甩个饭 APK · Build #${{ github.run_number }}
+          body: |
+            自动构建的 Android APK，可直接安装到手机。
+
+            **安装方法：**
+            1. 用手机浏览器打开本页面，下载 `app-debug.apk`
+            2. 手机点开 APK → 弹出"是否允许安装来自此来源的应用" → 同意
+            3. 安装完成，桌面出现"甩个饭"图标
+
+            > Debug 版本，仅供个人使用。
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
